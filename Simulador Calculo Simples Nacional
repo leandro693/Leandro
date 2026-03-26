@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador Tributário - Grupo Maradel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* TEMA ESCURO PROFUNDO */
+        :root { 
+            --laranja: #DB8438; 
+            --bg-fundo: #09090b; 
+            --bg-painel: #18181b; 
+            --borda: #27272a; 
+            --texto-claro: #f4f4f5; 
+            --texto-medio: #a1a1aa;
+            --bg-input: #121214;
+        }
+        body { font-family: Arial, Helvetica, sans-serif; background-color: var(--bg-fundo); color: var(--texto-claro); overflow: hidden; }
+        
+        .text-maradel { color: var(--laranja); font-weight: bold; }
+        .btn-maradel { background-color: var(--laranja); color: white; font-weight: bold; transition: 0.3s; }
+        .btn-maradel:hover { background-color: #b86b2a; }
+        
+        table.sim-table { table-layout: fixed; width: max-content; min-width: 100%; margin: 0 auto; }
+        .sim-table th { font-size: 12px; background-color: #111113; color: var(--texto-medio); padding: 10px 6px !important; text-transform: uppercase; border-right: 1px solid var(--borda); border-bottom: 1px solid var(--borda); }
+        .sim-table td { padding: 6px !important; border-bottom: 1px solid var(--borda); border-right: 1px solid var(--borda); vertical-align: middle; }
+        
+        input[type="text"], input[type="password"] { font-size: 15px !important; font-weight: bold; text-align: right; border: 1px solid var(--borda); background-color: var(--bg-input); color: white; border-radius: 4px; padding: 6px 4px; width: 100%; outline-color: var(--laranja); transition: 0.2s; }
+        input[type="password"] { text-align: left; }
+        input[type="text"]:focus, input[type="password"]:focus { border-color: var(--laranja); box-shadow: 0 0 5px rgba(219, 132, 56, 0.3); }
+        textarea { border: 1px solid var(--borda); border-radius: 4px; padding: 12px; width: 100%; background: var(--bg-input); color: white; outline-color: var(--laranja); font-family: monospace; font-size: 14px; white-space: pre; }
+        
+        .tab-active { border-bottom: 3px solid var(--laranja); font-weight: bold; color: var(--laranja); }
+        .plus-btn { background: var(--laranja); color: white; border-radius: 50%; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; border: none; }
+        
+        .ref-table th { background-color: #111113; color: var(--texto-medio); font-size: 13px; padding: 10px 6px; text-align: center; border: 1px solid var(--borda); }
+        .ref-table td { background-color: var(--bg-painel); color: var(--texto-claro); font-size: 14px; text-align: center; border: 1px solid var(--borda); padding: 8px 4px; }
+        .ref-table tr:nth-child(even) td { background-color: #27272a; }
+        
+        .custom-checkbox input:not(:checked) + div { background-color: transparent; color: transparent; border-color: #52525b; }
+        .custom-checkbox input:checked + div { background-color: var(--laranja); border-color: var(--laranja); color: white; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-fundo); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--laranja); }
+
+        .bg-painel { background-color: var(--bg-painel); }
+        .border-painel { border-color: var(--borda); }
+        .text-dim { color: var(--texto-medio); }
+    </style>
+</head>
+<body class="w-full h-screen flex flex-col">
+
+    <!-- Modais de Controle (Remoção, Aplicação e Reset) -->
+    <div id="modalConfirm" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-[#1e1e20] p-6 rounded-xl shadow-2xl w-full max-w-md border border-[#333336]">
+            <h3 class="text-xl font-black mb-3 text-red-400">Atenção!</h3>
+            <p class="text-gray-300 mb-6 text-sm" id="modalText"></p>
+            <div class="flex justify-end gap-3">
+                <button onclick="fecharModal()" class="px-5 py-2 rounded text-sm font-bold text-gray-300 bg-gray-700 hover:bg-gray-600">Cancelar</button>
+                <button onclick="confirmarRemocaoAnexo()" class="px-5 py-2 rounded text-sm font-bold text-white bg-red-600 hover:bg-red-700">Sim, Remover</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalConfirmAplicar" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-[#1e1e20] p-6 rounded-xl shadow-2xl w-full max-w-md border border-[#333336]">
+            <h3 class="text-xl font-black mb-3 text-maradel">Aplicar Valores</h3>
+            <p class="text-gray-300 mb-6 text-sm">Deseja aplicar os valores deste mês para os meses seguintes? Isso substituirá os dados já digitados.</p>
+            <div class="flex justify-end gap-3">
+                <button onclick="fecharModalAplicar()" class="px-5 py-2 rounded text-sm font-bold text-gray-300 bg-gray-700 hover:bg-gray-600">Não</button>
+                <button onclick="confirmarAplicarParaBaixo()" class="px-5 py-2 rounded text-sm font-bold text-white btn-maradel">Sim, Aplicar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalReset" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-[#1e1e20] p-6 rounded-xl shadow-2xl w-full max-w-md border border-[#333336] text-center">
+            <h3 class="text-xl font-black mb-2 text-white">Nova Consulta</h3>
+            <p class="text-gray-400 mb-6 text-sm">Tem certeza que deseja limpar tudo? O simulador será redefinido ao estado inicial.</p>
+            <div class="flex justify-center gap-4">
+                <button onclick="document.getElementById('modalReset').classList.add('hidden')" class="px-5 py-2 rounded text-sm font-bold text-gray-300 bg-gray-700 hover:bg-gray-600">Cancelar</button>
+                <button onclick="location.reload()" class="px-5 py-2 rounded text-sm font-bold text-white bg-red-600 hover:bg-red-700">Limpar Tudo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Anexo Personalizado -->
+    <div id="modalPers" class="hidden fixed inset-0 bg-black/80 z-[70] flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-[#1e1e20] p-6 rounded-xl shadow-2xl w-full max-w-sm border border-[#333336]">
+            <h3 class="text-xl font-black mb-2 text-maradel" id="modalPersTitle">Configurar Abatimentos</h3>
+            <p class="text-gray-400 mb-6 text-xs">Selecione os impostos que serão <b>ABATIDOS (ISENTOS)</b> neste anexo personalizado.</p>
+            <div class="grid grid-cols-2 gap-3 mb-6" id="listaImpostosPers">
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="pers_IRPJ" class="w-4 h-4 accent-maradel"><span class="text-sm font-bold text-gray-300">IRPJ</span></label>
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="pers_CSLL" class="w-4 h-4 accent-maradel"><span class="text-sm font-bold text-gray-300">CSLL</span></label>
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="pers_Cofins" class="w-4 h-4 accent-maradel"><span class="text-sm font-bold text-gray-300">COFINS</span></label>
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="pers_Pis" class="w-4 h-4 accent-maradel"><span class="text-sm font-bold text-gray-300">PIS</span></label>
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="pers_CPP" class="w-4 h-4 accent-maradel"><span class="text-sm font-bold text-gray-300">CPP / INSS</span></label>
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="pers_ICMS" class="w-4 h-4 accent-maradel"><span class="text-sm font-bold text-gray-300">ICMS</span></label>
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="pers_ISS" class="w-4 h-4 accent-maradel"><span class="text-sm font-bold text-gray-300">ISS</span></label>
+                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="pers_IPI" class="w-4 h-4 accent-maradel"><span class="text-sm font-bold text-gray-300">IPI</span></label>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button onclick="fecharConfigPers()" class="px-5 py-2 rounded text-sm font-bold text-gray-300 bg-gray-700 hover:bg-gray-600">Cancelar</button>
+                <button onclick="salvarConfigPers()" class="px-5 py-2 rounded text-sm font-bold text-white bg-maradel hover:bg-orange-600">Salvar Padrão</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Senha e Configuração Geral -->
+    <div id="modalSenha" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-[#1e1e20] p-8 rounded-xl shadow-2xl border border-[#333336] w-full max-w-md">
+            <h3 class="text-xl font-black mb-2 text-white">Acesso Restrito</h3>
+            <p class="text-gray-400 text-xs mb-5">Insira a senha de administrador para alterar as alíquotas oficiais.</p>
+            <input type="password" id="senhaAdmin" placeholder="Digite a senha..." class="mb-2" onkeypress="if(event.key === 'Enter') verificarSenha()">
+            <div id="erroSenha" class="text-red-400 text-xs font-bold hidden mb-2">Senha incorreta.</div>
+            <div id="dicaSenha" class="text-blue-300 text-xs font-bold hidden mb-4 bg-[#121c2a] p-2 rounded border border-[#1e2a3a]">Dica: O seu próprio nome, com a primeira letra maiúscula.</div>
+            <div class="flex justify-between items-center mt-5">
+                <button onclick="mostrarDica()" class="text-xs text-gray-500 hover:text-gray-300 underline">Esqueci a senha</button>
+                <div class="flex gap-2">
+                    <button onclick="fecharModalSenha()" class="px-4 py-2 rounded text-sm font-bold text-gray-300 bg-gray-700 hover:bg-gray-600">Cancelar</button>
+                    <button onclick="verificarSenha()" class="px-4 py-2 rounded text-sm font-bold text-white bg-gray-600 hover:bg-gray-500">Acessar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Configurações JSON -->
+    <div id="modalConfig" class="hidden fixed inset-0 bg-black/90 z-[60] flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-[#1e1e20] p-6 rounded-xl shadow-2xl border border-[#333336] w-full max-w-5xl h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center mb-3">
+                <div>
+                    <h3 class="text-xl font-black text-white">Módulo de Configurações - Tabelas Referenciais</h3>
+                    <p class="text-red-400 text-xs font-bold">CUIDADO: Erros de formatação neste painel quebram o simulador.</p>
+                </div>
+                <button onclick="fecharModalConfig()" class="text-gray-500 hover:text-white font-bold text-2xl">&times;</button>
+            </div>
+            <textarea id="jsonEditor" class="flex-grow bg-[#09090b] text-green-400 border-[#333336] p-4 mb-4 font-mono text-sm"></textarea>
+            <div class="flex justify-between items-center">
+                <button onclick="restaurarTabelasPadrao()" class="px-4 py-2 rounded text-sm font-bold text-gray-300 bg-gray-700 hover:bg-gray-600">↻ Restaurar Lei 2026</button>
+                <div class="flex gap-4 items-center">
+                    <span id="msgSalvar" class="text-green-400 font-bold text-xs hidden">✔ Salvo! Atualizando...</span>
+                    <span id="msgErroSalvar" class="text-red-400 font-bold text-xs hidden">❌ JSON Inválido.</span>
+                    <button onclick="salvarTabelasEditadas()" class="px-6 py-2 rounded text-sm font-bold text-white bg-green-700 hover:bg-green-600">💾 Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CABEÇALHO SUPER COMPACTO -->
+    <div class="w-full px-4 pt-4 pb-2 border-b border-[#27272a] bg-[#09090b] shrink-0">
+        <header class="flex justify-between items-center mb-2">
+            <div>
+                <h1 class="text-3xl font-black tracking-tighter text-white leading-none">GRUPO <span class="text-maradel">MARADEL</span></h1>
+                <p class="text-[10px] font-bold text-dim tracking-[0.2em] uppercase mt-1">Consultoria Contábil & Estratégica</p>
+            </div>
+            <div class="flex gap-3 no-print items-center">
+                <button onclick="document.getElementById('modalReset').classList.remove('hidden')" class="px-4 py-2 rounded shadow text-white bg-[#27272a] border border-[#3f3f46] hover:bg-[#3f3f46] font-bold text-xs flex items-center gap-2 transition-colors">
+                    🔄 Nova Consulta
+                </button>
+                <button onclick="abrirModalSenha()" class="px-4 py-2 rounded shadow text-white bg-[#27272a] border border-[#3f3f46] hover:bg-[#3f3f46] font-bold text-xs flex items-center gap-2 transition-colors">
+                    ⚙️ Config.
+                </button>
+                <div class="relative group">
+                    <button class="btn-maradel px-6 py-2 rounded shadow-lg flex items-center gap-2 text-xs uppercase">Relatórios ▼</button>
+                    <!-- Ponte invisível estendida para o hover não sumir -->
+                    <div class="absolute hidden group-hover:block right-0 top-full pt-1 pb-2 w-48 z-50">
+                        <div class="bg-painel border border-[#3f3f46] rounded shadow-xl text-xs overflow-hidden mt-1">
+                            <button onclick="window.print()" class="w-full text-left p-3 hover:bg-[#27272a] border-b border-[#333336] font-bold text-white">📄 Exportar PDF</button>
+                            <button onclick="exportarExcel()" class="w-full text-left p-3 hover:bg-[#27272a] font-bold text-white">📊 Gerar Excel XLSX</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <nav class="flex gap-8 no-print pt-2">
+            <button onclick="aba('sim')" id="aSim" class="pb-2 text-sm tab-active uppercase tracking-wide">Simulador Estratégico</button>
+            <button onclick="aba('ref')" id="aRef" class="pb-2 text-sm text-dim font-bold uppercase hover:text-white transition-colors tracking-wide">Tabelas de Lei</button>
+        </nav>
+    </div>
+
+    <!-- ÁREA PRINCIPAL FLEXÍVEL -->
+    <div class="flex-grow flex flex-col p-4 overflow-hidden">
+        
+        <div id="cSim" class="flex flex-col h-full">
+            <!-- PAINEL DE CONTROLE COMPACTO EM LINHA (5 COLUNAS) -->
+            <div class="bg-painel p-4 rounded-lg shadow-sm border border-painel mb-4 flex gap-6 shrink-0 no-print items-start">
+                
+                <div class="flex flex-col gap-3">
+                    <div class="w-32">
+                        <label class="text-[10px] font-black text-dim mb-1 block uppercase">Abertura</label>
+                        <input type="text" id="dataAb" oninput="mascaraData(this)" onblur="preencherEIniciar()" placeholder="MM/AAAA" class="!text-left !text-sm p-2 transition-colors duration-500" maxlength="7">
+                    </div>
+                    <div class="w-32">
+                        <label class="text-[10px] font-black text-maradel mb-1 block uppercase">Início Sim.</label>
+                        <input type="text" id="dataSim" oninput="mascaraData(this)" onblur="iniciarSimulador()" placeholder="MM/AAAA" class="!text-left !text-sm p-2 !bg-[#2a1c12] !border-[#DB8438]" maxlength="7">
+                    </div>
+                </div>
+                
+                <div class="w-px bg-[#333336] mx-2 self-stretch"></div>
+
+                <!-- 5 COLUNAS DE ANEXOS COM OPÇÃO PERSONALIZADA -->
+                <div class="flex-grow grid grid-cols-5 gap-4">
+                    
+                    <!-- Coluna Anexo I -->
+                    <div class="flex flex-col gap-2">
+                        <span class="text-[11px] font-black text-maradel border-b border-[#333336] pb-1 uppercase flex items-center justify-between">ANEXO I</span>
+                        
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo1" value="1" onchange="tentarToggleAnexo('1')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">Normal (5102)</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Venda de mercadorias sem substituição tributária.
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <div class="flex items-center gap-1.5 flex-wrap leading-none">
+                                <label class="custom-checkbox flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" class="hidden" id="chkAnexo1_ST" value="1_ST" onchange="tentarToggleAnexo('1_ST')">
+                                    <div class="w-3 h-3 border rounded flex items-center justify-center text-[8px] font-bold">✔</div>
+                                    <span class="font-bold text-[10px] text-gray-300 tracking-tight">ST ICMS (5405)</span>
+                                </label>
+                                <label class="custom-checkbox flex items-center gap-0.5 cursor-pointer ml-0.5" title="Isentar também PIS e COFINS (Monofásico)">
+                                    <input type="checkbox" class="hidden" id="chkAnexo1_ST_Mono" onchange="recalc()">
+                                    <div class="w-3 h-3 border rounded flex items-center justify-center text-[8px] font-bold">✔</div>
+                                    <span class="font-normal text-[9px] text-maradel whitespace-nowrap">+ Mono</span>
+                                </label>
+                            </div>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Mercadorias com ICMS retido por ST. Marque '+ Mono' para isentar também PIS e COFINS.
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo1_EXP" value="1_EXP" onchange="tentarToggleAnexo('1_EXP')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">Exportação</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Venda para mercado externo (Isento ICMS, PIS, COFINS).
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo1_PERS" value="1_PERS" onchange="tentarToggleAnexo('1_PERS')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300 flex items-center gap-1">
+                                    Personalizado <button onclick="event.preventDefault(); event.stopPropagation(); abrirConfigPers('1_PERS')" class="text-gray-500 hover:text-maradel ml-1" title="Configurar Impostos a Abater">⚙️</button>
+                                </span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Configuração manual de abatimentos isentos ou retidos.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Coluna Anexo II -->
+                    <div class="flex flex-col gap-2">
+                        <span class="text-[11px] font-black text-maradel border-b border-[#333336] pb-1 uppercase flex items-center justify-between">ANEXO II</span>
+                        
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo2" value="2" onchange="tentarToggleAnexo('2')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">Normal (5101)</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Venda de produtos industrializados.
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <div class="flex items-center gap-1.5 flex-wrap leading-none">
+                                <label class="custom-checkbox flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" class="hidden" id="chkAnexo2_ST" value="2_ST" onchange="tentarToggleAnexo('2_ST')">
+                                    <div class="w-3 h-3 border rounded flex items-center justify-center text-[8px] font-bold">✔</div>
+                                    <span class="font-bold text-[10px] text-gray-300 tracking-tight">ST ICMS/IPI (5401)</span>
+                                </label>
+                                <label class="custom-checkbox flex items-center gap-0.5 cursor-pointer ml-0.5" title="Isentar também PIS e COFINS (Monofásico)">
+                                    <input type="checkbox" class="hidden" id="chkAnexo2_ST_Mono" onchange="recalc()">
+                                    <div class="w-3 h-3 border rounded flex items-center justify-center text-[8px] font-bold">✔</div>
+                                    <span class="font-normal text-[9px] text-maradel whitespace-nowrap">+ Mono</span>
+                                </label>
+                            </div>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Produtos industrializados com retenção de ICMS/IPI. Marque '+ Mono' para isentar PIS e COFINS.
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo2_EXP" value="2_EXP" onchange="tentarToggleAnexo('2_EXP')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">Exportação</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Venda para mercado externo (Isento ICMS, IPI, PIS, COFINS).
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo2_PERS" value="2_PERS" onchange="tentarToggleAnexo('2_PERS')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300 flex items-center gap-1">
+                                    Personalizado <button onclick="event.preventDefault(); event.stopPropagation(); abrirConfigPers('2_PERS')" class="text-gray-500 hover:text-maradel ml-1" title="Configurar Impostos a Abater">⚙️</button>
+                                </span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Configuração manual de abatimentos isentos ou retidos.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Coluna Anexo III -->
+                    <div class="flex flex-col gap-2">
+                        <span class="text-[11px] font-black text-maradel border-b border-[#333336] pb-1 uppercase flex items-center justify-between">ANEXO III</span>
+                        
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo3" value="3" onchange="tentarToggleAnexo('3')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">Normal</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Receitas de serviços sem retenção (Ex: Manutenção, Clínicas).
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo3_RET" value="3_RET" onchange="tentarToggleAnexo('3_RET')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">ISS Retido</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Serviços com ISS retido na fonte ou fixo (Ex: Contabilidade).
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo3_EXP" value="3_EXP" onchange="tentarToggleAnexo('3_EXP')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">Exportação</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Exportação de serviços (Isento de PIS, COFINS, ISS).
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo3_PERS" value="3_PERS" onchange="tentarToggleAnexo('3_PERS')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300 flex items-center gap-1">
+                                    Personalizado <button onclick="event.preventDefault(); event.stopPropagation(); abrirConfigPers('3_PERS')" class="text-gray-500 hover:text-maradel ml-1" title="Configurar Impostos a Abater">⚙️</button>
+                                </span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Configuração manual de abatimentos isentos ou retidos.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Coluna Anexo IV -->
+                    <div class="flex flex-col gap-2">
+                        <span class="text-[11px] font-black text-maradel border-b border-[#333336] pb-1 uppercase flex items-center justify-between">ANEXO IV</span>
+                        
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo4" value="4" onchange="tentarToggleAnexo('4')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">Normal</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Obras, Limpeza, Vigilância, Advocacia (Sem CPP).
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo4_RET" value="4_RET" onchange="tentarToggleAnexo('4_RET')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">ISS Retido</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Serviços do Anexo IV com ISS retido na fonte.
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo4_EXP" value="4_EXP" onchange="tentarToggleAnexo('4_EXP')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">Exportação</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Exportação de serviços do Anexo IV.
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo4_PERS" value="4_PERS" onchange="tentarToggleAnexo('4_PERS')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300 flex items-center gap-1">
+                                    Personalizado <button onclick="event.preventDefault(); event.stopPropagation(); abrirConfigPers('4_PERS')" class="text-gray-500 hover:text-maradel ml-1" title="Configurar Impostos a Abater">⚙️</button>
+                                </span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Configuração manual de abatimentos isentos ou retidos.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Coluna Anexo V -->
+                    <div class="flex flex-col gap-2">
+                        <span class="text-[11px] font-black text-maradel border-b border-[#333336] pb-1 uppercase flex items-center justify-between">ANEXO V</span>
+                        
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo5" value="5" onchange="tentarToggleAnexo('5')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">Normal</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Serviços sujeitos ao Fator R (Medicina, TI, Engenharia).
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo5_RET" value="5_RET" onchange="tentarToggleAnexo('5_RET')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">ISS Retido</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Serviços do Anexo V com ISS retido na fonte.
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo5_EXP" value="5_EXP" onchange="tentarToggleAnexo('5_EXP')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300">Exportação</span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Exportação de serviços do Anexo V.
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between group/tt relative w-full">
+                            <label class="custom-checkbox flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" class="hidden" id="chkAnexo5_PERS" value="5_PERS" onchange="tentarToggleAnexo('5_PERS')">
+                                <div class="w-3.5 h-3.5 border rounded flex items-center justify-center text-[9px] font-bold">✔</div>
+                                <span class="font-bold text-[10px] text-gray-300 flex items-center gap-1">
+                                    Personalizado <button onclick="event.preventDefault(); event.stopPropagation(); abrirConfigPers('5_PERS')" class="text-gray-500 hover:text-maradel ml-1" title="Configurar Impostos a Abater">⚙️</button>
+                                </span>
+                            </label>
+                            <div class="w-3 h-3 rounded-full bg-black text-white border border-gray-600 text-[9px] font-bold flex items-center justify-center cursor-help shrink-0">!</div>
+                            <div class="absolute bottom-full right-0 mb-1 w-48 p-2 bg-black border border-gray-700 text-white text-[10px] font-normal rounded hidden group-hover/tt:block z-[60] shadow-xl pointer-events-none normal-case">
+                                Configuração manual de abatimentos isentos ou retidos.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- TABELA CENTRALIZADA -->
+            <div class="bg-painel rounded-xl shadow-xl overflow-y-auto overflow-x-auto border border-painel w-full flex-grow flex justify-center custom-scrollbar">
+                <table class="sim-table mx-auto h-max" id="tabelaSimulacao">
+                    <thead id="headTabela" class="sticky top-0 z-10"></thead>
+                    <tbody id="corpo"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="cRef" class="hidden bg-painel p-8 rounded-xl shadow-md border border-painel overflow-y-auto h-full">
+            <h2 class="text-xl font-black border-l-[6px] border-maradel pl-4 uppercase mb-8 text-white">Tabelas Oficiais com Repartição (2026)</h2>
+            <div id="tabelasArea" class="space-y-10"></div>
+        </div>
+    </div>
+
+    <script>
+        const TABELAS_DEFAULT = {
+            1: [ 
+                {ate: 180000, aliq: 0.04, ded: 0, part: {CPP:0.415, CSLL:0.035, ICMS:0.34, IRPJ:0.055, Cofins:0.1274, Pis:0.0276}},
+                {ate: 360000, aliq: 0.073, ded: 5940, part: {CPP:0.415, CSLL:0.035, ICMS:0.34, IRPJ:0.055, Cofins:0.1274, Pis:0.0276}},
+                {ate: 720000, aliq: 0.095, ded: 13860, part: {CPP:0.42, CSLL:0.035, ICMS:0.335, IRPJ:0.055, Cofins:0.1274, Pis:0.0276}},
+                {ate: 1800000, aliq: 0.107, ded: 22500, part: {CPP:0.42, CSLL:0.035, ICMS:0.335, IRPJ:0.055, Cofins:0.1274, Pis:0.0276}},
+                {ate: 3600000, aliq: 0.143, ded: 87300, part: {CPP:0.42, CSLL:0.035, ICMS:0.335, IRPJ:0.055, Cofins:0.1274, Pis:0.0276}},
+                {ate: 4800000, aliq: 0.19, ded: 378000, part: {CPP:0.421, CSLL:0.10, IRPJ:0.135, Cofins:0.2827, Pis:0.0613}}
+            ],
+            2: [
+                {ate: 180000, aliq: 0.045, ded: 0, part: {CPP:0.375, IPI:0.075, CSLL:0.035, ICMS:0.32, IRPJ:0.055, Cofins:0.1151, Pis:0.0249}},
+                {ate: 360000, aliq: 0.078, ded: 5940, part: {CPP:0.375, IPI:0.075, CSLL:0.035, ICMS:0.32, IRPJ:0.055, Cofins:0.1151, Pis:0.0249}},
+                {ate: 720000, aliq: 0.10, ded: 13860, part: {CPP:0.375, IPI:0.075, CSLL:0.035, ICMS:0.32, IRPJ:0.055, Cofins:0.1151, Pis:0.0249}},
+                {ate: 1800000, aliq: 0.112, ded: 22500, part: {CPP:0.375, IPI:0.075, CSLL:0.035, ICMS:0.32, IRPJ:0.055, Cofins:0.1151, Pis:0.0249}},
+                {ate: 3600000, aliq: 0.147, ded: 85500, part: {CPP:0.375, IPI:0.075, CSLL:0.035, ICMS:0.32, IRPJ:0.055, Cofins:0.1151, Pis:0.0249}},
+                {ate: 4800000, aliq: 0.30, ded: 720000, part: {CPP:0.235, IPI:0.35, CSLL:0.075, IRPJ:0.085, Cofins:0.2096, Pis:0.0454}}
+            ],
+            3: [
+                {ate: 180000, aliq: 0.06, ded: 0, part: {CPP:0.434, ISS:0.335, CSLL:0.035, IRPJ:0.04, Cofins:0.1282, Pis:0.0278}},
+                {ate: 360000, aliq: 0.112, ded: 9360, part: {CPP:0.434, ISS:0.32, CSLL:0.035, IRPJ:0.04, Cofins:0.1405, Pis:0.0305}},
+                {ate: 720000, aliq: 0.135, ded: 17640, part: {CPP:0.434, ISS:0.325, CSLL:0.035, IRPJ:0.04, Cofins:0.1364, Pis:0.0296}},
+                {ate: 1800000, aliq: 0.16, ded: 35640, part: {CPP:0.434, ISS:0.325, CSLL:0.035, IRPJ:0.04, Cofins:0.1364, Pis:0.0296}},
+                {ate: 3600000, aliq: 0.21, ded: 125640, part: {CPP:0.434, ISS:0.335, CSLL:0.035, IRPJ:0.04, Cofins:0.1282, Pis:0.0278}},
+                {ate: 4800000, aliq: 0.33, ded: 648000, part: {CPP:0.305, CSLL:0.15, IRPJ:0.35, Cofins:0.1603, Pis:0.0347}}
+            ],
+            4: [
+                {ate: 180000, aliq: 0.045, ded: 0, part: {ISS:0.445, CSLL:0.152, IRPJ:0.188, Cofins:0.1767, Pis:0.0383}},
+                {ate: 360000, aliq: 0.09, ded: 8100, part: {ISS:0.40, CSLL:0.152, IRPJ:0.198, Cofins:0.2055, Pis:0.0445}},
+                {ate: 720000, aliq: 0.102, ded: 12420, part: {ISS:0.40, CSLL:0.152, IRPJ:0.208, Cofins:0.1973, Pis:0.0427}},
+                {ate: 1800000, aliq: 0.14, ded: 39780, part: {ISS:0.40, CSLL:0.192, IRPJ:0.178, Cofins:0.189, Pis:0.041}},
+                {ate: 3600000, aliq: 0.22, ded: 183780, part: {ISS:0.40, CSLL:0.192, IRPJ:0.188, Cofins:0.1808, Pis:0.0392}},
+                {ate: 4800000, aliq: 0.33, ded: 828000, part: {CSLL:0.215, IRPJ:0.535, Cofins:0.2055, Pis:0.0445}}
+            ],
+            5: [
+                {ate: 180000, aliq: 0.155, ded: 0, part: {CPP:0.2885, ISS:0.14, CSLL:0.15, IRPJ:0.25, Cofins:0.141, Pis:0.0305}},
+                {ate: 360000, aliq: 0.18, ded: 4500, part: {CPP:0.2785, ISS:0.17, CSLL:0.15, IRPJ:0.23, Cofins:0.141, Pis:0.0305}},
+                {ate: 720000, aliq: 0.195, ded: 9900, part: {CPP:0.2385, ISS:0.19, CSLL:0.15, IRPJ:0.24, Cofins:0.1492, Pis:0.0323}},
+                {ate: 1800000, aliq: 0.205, ded: 17100, part: {CPP:0.2385, ISS:0.21, CSLL:0.15, IRPJ:0.21, Cofins:0.1574, Pis:0.0341}},
+                {ate: 3600000, aliq: 0.23, ded: 62100, part: {CPP:0.2385, ISS:0.235, CSLL:0.125, IRPJ:0.23, Cofins:0.141, Pis:0.0305}},
+                {ate: 4800000, aliq: 0.305, ded: 540000, part: {CPP:0.295, CSLL:0.155, IRPJ:0.35, Cofins:0.1644, Pis:0.0356}}
+            ]
+        };
+
+        let TABELAS;
+        try {
+            const stor = localStorage.getItem('maradel_tabelas');
+            TABELAS = stor ? JSON.parse(stor) : TABELAS_DEFAULT;
+        } catch(e) {
+            TABELAS = TABELAS_DEFAULT;
+        }
+
+        const NOMES_ANEXOS = { 
+            "1": "Anexo I (5102)", "1_ST": "Anexo I (5405)", "1_EXP": "Anexo I (Exp.)", "1_PERS": "Anexo I (Pers.)",
+            "2": "Anexo II (5101)", "2_ST": "Anexo II (5401)", "2_EXP": "Anexo II (Exp.)", "2_PERS": "Anexo II (Pers.)",
+            "3": "Anexo III (Norm.)", "3_RET": "Anexo III (Ret.)", "3_EXP": "Anexo III (Exp.)", "3_PERS": "Anexo III (Pers.)",
+            "4": "Anexo IV (Norm.)", "4_RET": "Anexo IV (Ret.)", "4_EXP": "Anexo IV (Exp.)", "4_PERS": "Anexo IV (Pers.)",
+            "5": "Anexo V (Norm.)", "5_RET": "Anexo V (Ret.)", "5_EXP": "Anexo V (Exp.)", "5_PERS": "Anexo V (Pers.)"
+        };
+        
+        let dados = [];
+        let anexosSel = []; 
+        let anexoPendenteRemocao = null;
+        let rbt12Value = 0;
+        let folha12Value = 0;
+        let precisaHistorico = false;
+        let dIniHist, dFimHist;
+        let idxAplicarPendente = null;
+
+        let abatimentosPers = {};
+        Object.keys(NOMES_ANEXOS).forEach(k => { if(k.includes('PERS')) abatimentosPers[k] = {}; });
+        let anexoPersAtual = "";
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const dataAtual = new Date();
+            document.getElementById('dataSim').value = `${dataAtual.getMonth()+1}`.padStart(2,'0') + '/' + dataAtual.getFullYear();
+            iniciarSimulador();
+        });
+
+        function abrirConfigPers(anexoId) {
+            anexoPersAtual = anexoId;
+            const imp = abatimentosPers[anexoId];
+            const check = id => document.getElementById(id).checked = !!imp[id.replace('pers_', '')];
+            
+            check('pers_IRPJ'); check('pers_CSLL'); check('pers_Cofins'); check('pers_Pis');
+            check('pers_CPP'); check('pers_ICMS'); check('pers_ISS'); check('pers_IPI');
+            
+            document.getElementById('modalPersTitle').innerText = "Configurar: " + NOMES_ANEXOS[anexoId];
+            document.getElementById('modalPers').classList.remove('hidden');
+        }
+
+        function salvarConfigPers() {
+            abatimentosPers[anexoPersAtual] = {
+                'IRPJ': document.getElementById('pers_IRPJ').checked,
+                'CSLL': document.getElementById('pers_CSLL').checked,
+                'Cofins': document.getElementById('pers_Cofins').checked,
+                'Pis': document.getElementById('pers_Pis').checked,
+                'CPP': document.getElementById('pers_CPP').checked,
+                'ICMS': document.getElementById('pers_ICMS').checked,
+                'ISS': document.getElementById('pers_ISS').checked,
+                'IPI': document.getElementById('pers_IPI').checked,
+            };
+            fecharConfigPers();
+            recalc(); 
+        }
+
+        function fecharConfigPers() { document.getElementById('modalPers').classList.add('hidden'); }
+
+        function abrirModalSenha() {
+            document.getElementById('senhaAdmin').value = "";
+            document.getElementById('erroSenha').classList.add('hidden');
+            document.getElementById('dicaSenha').classList.add('hidden');
+            document.getElementById('modalSenha').classList.remove('hidden');
+            setTimeout(() => document.getElementById('senhaAdmin').focus(), 100);
+        }
+
+        function fecharModalSenha() { document.getElementById('modalSenha').classList.add('hidden'); }
+        function mostrarDica() { document.getElementById('dicaSenha').classList.remove('hidden'); }
+        function verificarSenha() {
+            if(document.getElementById('senhaAdmin').value === "Leandro") {
+                fecharModalSenha(); abrirModalConfig();
+            } else document.getElementById('erroSenha').classList.remove('hidden');
+        }
+
+        function abrirModalConfig() {
+            document.getElementById('msgSalvar').classList.add('hidden');
+            document.getElementById('msgErroSalvar').classList.add('hidden');
+            document.getElementById('jsonEditor').value = JSON.stringify(TABELAS, null, 4);
+            document.getElementById('modalConfig').classList.remove('hidden');
+        }
+
+        function fecharModalConfig() { document.getElementById('modalConfig').classList.add('hidden'); }
+        function salvarTabelasEditadas() {
+            try {
+                const nv = JSON.parse(document.getElementById('jsonEditor').value);
+                localStorage.setItem('maradel_tabelas', JSON.stringify(nv));
+                TABELAS = nv;
+                document.getElementById('msgErroSalvar').classList.add('hidden');
+                document.getElementById('msgSalvar').classList.remove('hidden');
+                setTimeout(() => location.reload(), 800);
+            } catch(e) {
+                document.getElementById('msgErroSalvar').classList.remove('hidden');
+                document.getElementById('msgSalvar').classList.add('hidden');
+            }
+        }
+
+        function restaurarTabelasPadrao() {
+            if(confirm("Deseja restaurar as tabelas para a Lei 2026 oficial?")) {
+                localStorage.removeItem('maradel_tabelas'); location.reload();
+            }
+        }
+
+        function getFaixa(rbt) {
+            if(rbt <= 180000) return {n:1, t:"Até 180 mil"};
+            if(rbt <= 360000) return {n:2, t:"De 180 mil a 360 mil"};
+            if(rbt <= 720000) return {n:3, t:"De 360 mil a 720 mil"};
+            if(rbt <= 1800000) return {n:4, t:"De 720 mil a 1,8 mi"};
+            if(rbt <= 3600000) return {n:5, t:"De 1,8 mi a 3,6 mi"};
+            return {n:6, t:"De 3,6 mi a 4,8 mi"};
+        }
+
+        function mascaraData(i) {
+            let v = i.value.replace(/\D/g, "");
+            if (v.length > 2) v = v.substring(0, 2) + "/" + v.substring(2, 6);
+            i.value = v;
+        }
+
+        function mascara(v) {
+            v = v.toString().replace(/\D/g, "");
+            v = (v / 100).toFixed(2).replace(".", ",");
+            v = v.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+            return v;
+        }
+
+        function pM(v) { return parseFloat(v.toString().replace(/\./g, "").replace(",", ".")) || 0; }
+
+        function diffMeses(d1, d2) {
+            let months = (d2.getFullYear() - d1.getFullYear()) * 12;
+            months -= d1.getMonth();
+            months += d2.getMonth();
+            return months;
+        }
+
+        function getD(str) {
+            if(!str || !str.includes('/')) return null;
+            const [m, a] = str.split('/');
+            return new Date(a, m-1, 1);
+        }
+
+        function preencherEIniciar() {
+            const dAb = document.getElementById('dataAb').value;
+            if(dAb.length === 7 && document.getElementById('dataSim').value === "") {
+                const dataAtual = new Date();
+                document.getElementById('dataSim').value = `${dataAtual.getMonth()+1}`.padStart(2,'0') + '/' + dataAtual.getFullYear();
+            }
+            iniciarSimulador();
+        }
+
+        function iniciarSimulador() {
+            const dataAbStr = document.getElementById('dataAb').value;
+            const dataSimStr = document.getElementById('dataSim').value;
+            if(!dataSimStr || dataSimStr.length < 7) return;
+
+            const dataAb = getD(dataAbStr);
+            const dataSim = getD(dataSimStr);
+            let m = dataSim.getMonth() + 1;
+            let a = dataSim.getFullYear();
+
+            precisaHistorico = false;
+            rbt12Value = 0;
+            folha12Value = 0;
+
+            if (dataAb && diffMeses(dataAb, dataSim) > 0) {
+                precisaHistorico = true;
+                dFimHist = new Date(dataSim); dFimHist.setMonth(dFimHist.getMonth() - 1);
+                dIniHist = new Date(dFimHist); dIniHist.setMonth(dIniHist.getMonth() - 11);
+            }
+
+            dados = [];
+            let chavesAnexos = Object.keys(NOMES_ANEXOS);
+            for(let i=0; i<12; i++){
+                let mesObj = { mes: `${(m-1+i)%12+1}`.padStart(2,'0') + '/' + (a + Math.floor((m-1+i)/12)), folha: 0, exp: false };
+                chavesAnexos.forEach(k => mesObj['v'+k] = 0);
+                dados.push(mesObj);
+            }
+
+            renderTableStructure();
+        }
+
+        function tentarToggleAnexo(id) {
+            const cb = document.getElementById('chkAnexo'+id);
+            if (!cb.checked) {
+                const temDados = dados.some(d => (d['v'+id] || 0) > 0);
+                if (temDados) {
+                    anexoPendenteRemocao = id;
+                    document.getElementById('modalText').innerHTML = `Deseja remover a coluna do <b>${NOMES_ANEXOS[id]}</b>?<br>Os valores já preenchidos serão perdidos.`;
+                    document.getElementById('modalConfirm').classList.remove('hidden');
+                } else {
+                    confirmarRemocaoAnexoDir(id);
+                }
+            } else {
+                if(!anexosSel.includes(id)) anexosSel.push(id);
+                anexosSel.sort();
+                renderTableStructure();
+            }
+        }
+
+        function confirmarRemocaoAnexo() {
+            if(anexoPendenteRemocao) confirmarRemocaoAnexoDir(anexoPendenteRemocao);
+            fecharModal();
+        }
+
+        function confirmarRemocaoAnexoDir(id) {
+            anexosSel = anexosSel.filter(x => x !== id);
+            dados.forEach(d => d['v'+id] = 0);
+            renderTableStructure();
+        }
+
+        function fecharModal() {
+            if(anexoPendenteRemocao && anexosSel.includes(anexoPendenteRemocao)) document.getElementById('chkAnexo'+anexoPendenteRemocao).checked = true;
+            document.getElementById('modalConfirm').classList.add('hidden');
+            anexoPendenteRemocao = null;
+        }
+
+        function renderTableStructure() {
+            const usaFolha = anexosSel.some(a => a.startsWith('5') || a.startsWith('3'));
+
+            let h = `<tr><th class="w-[80px] min-w-[80px] max-w-[80px]">Mês</th>`;
+            if(anexosSel.length > 0) h += `<th class="w-[125px] min-w-[125px] max-w-[125px]">RBT12 / Faixa</th>`;
+            
+            anexosSel.forEach(a => h += `<th class="w-[105px] min-w-[105px] max-w-[105px]">${NOMES_ANEXOS[a]}</th>`);
+            if(usaFolha) {
+                h += `<th class="w-[105px] min-w-[105px] max-w-[105px] bg-[#223040]">Folha Salarial</th>`;
+                h += `<th class="w-[70px] min-w-[70px] max-w-[70px] bg-[#223040]" title="Fator R">Fator R</th>`;
+            }
+            if(anexosSel.length > 0) h += `<th class="w-[155px] min-w-[155px] max-w-[155px] bg-maradel text-right">Total Devido</th><th class="w-[80px] min-w-[80px] max-w-[80px] no-print text-center bg-[#27272a]">Ação</th>`;
+            h += `</tr>`;
+            document.getElementById('headTabela').innerHTML = h;
+
+            let html = '';
+            
+            if (precisaHistorico && anexosSel.length > 0) {
+                const fmt = d => `${d.getMonth()+1}`.padStart(2,'0') + '/' + d.getFullYear();
+                let totalCols = 3 + anexosSel.length + (usaFolha ? 2 : 0);
+                
+                html += `
+                <tr class="bg-[#2a1c12] border-b border-[#3f2a1a]">
+                    <td class="font-black text-center text-sm text-maradel leading-tight py-3">Histórico<br><span class="text-[10px] text-gray-400 font-bold">${fmt(dIniHist)} a ${fmt(dFimHist)}</span></td>
+                    <td colspan="${totalCols - 1}">
+                        <div class="flex items-center justify-start gap-4 pl-4">
+                            <div class="flex items-center gap-2 bg-[#121214] p-1.5 rounded border border-[#333]">
+                                <span class="text-xs font-bold text-gray-400 uppercase">RBT12:</span>
+                                <input type="text" id="rbt12Ini" class="!w-36 bg-transparent !text-[15px] border-none focus:ring-0" oninput="atualizarHistFat(this.value)" placeholder="0,00" value="${rbt12Value ? mascara(rbt12Value.toFixed(2)) : ''}">
+                            </div>
+                            ${usaFolha ? `
+                            <div class="flex items-center gap-2 bg-[#121214] p-1.5 rounded border border-[#333]">
+                                <span class="text-xs font-bold text-gray-400 uppercase">Folha 12m:</span>
+                                <input type="text" id="folha12Ini" class="!w-32 bg-transparent !text-[15px] border-none focus:ring-0" oninput="atualizarHistFolha(this.value)" placeholder="0,00" value="${folha12Value ? mascara(folha12Value.toFixed(2)) : ''}">
+                            </div>` : ''}
+                        </div>
+                    </td>
+                </tr>`;
+            }
+
+            if(anexosSel.length === 0) {
+                html += `<tr><td colspan="3" class="text-center py-10 text-gray-500 font-bold">Por favor, selecione pelo menos um anexo no painel acima.</td></tr>`;
+                document.getElementById('corpo').innerHTML = html;
+                return;
+            }
+
+            dados.forEach((mes, idx) => {
+                html += `<tr class="hover:bg-[#27272a] transition-colors border-b border-[#333336]">`;
+                html += `<td class="font-bold text-gray-300 bg-[#1e1e20] text-center text-sm">${mes.mes}</td>`;
+                
+                html += `<td class="bg-[#18181b] text-right pr-3 leading-tight" id="out_${idx}_rbt12"></td>`;
+
+                anexosSel.forEach(a => {
+                    html += `<td><input type="text" id="in_${idx}_v${a}" value="${mes['v'+a]?mascara(mes['v'+a].toFixed(2)):''}" oninput="atualizarDado(${idx}, 'v${a}', this.value)"></td>`;
+                });
+
+                if(usaFolha) {
+                    html += `<td class="bg-[#121c2a]"><input type="text" id="in_${idx}_folha" value="${mes.folha?mascara(mes.folha.toFixed(2)):''}" oninput="atualizarDado(${idx}, 'folha', this.value)" class="!bg-[#09111a] !border-[#1e2a3a]"></td>`;
+                    html += `<td class="text-center font-bold bg-[#121c2a] text-[13px] leading-tight" id="out_${idx}_fatorR">0,0%</td>`;
+                }
+
+                html += `
+                    <td class="bg-[#18181b] text-right">
+                        <div class="flex items-center justify-end gap-3 px-1">
+                            <div class="text-right">
+                                <div class="font-black text-lg text-maradel" id="out_${idx}_tot">0,00</div>
+                                <div class="text-gray-400 text-[10px] font-bold" id="out_${idx}_efetiva">0,00% Efetiva</div>
+                            </div>
+                            <button tabindex="-1" class="plus-btn no-print shrink-0" onclick="toggleExp(${idx})">+</button>
+                        </div>
+                    </td>
+                    <td class="no-print text-center bg-[#27272a]">
+                        <button tabindex="-1" onclick="aplicarParaBaixo(${idx})" class="text-[10px] font-black text-gray-400 hover:text-white uppercase tracking-wider bg-[#333336] border border-[#444] px-2 py-1 rounded shadow-sm hover:bg-[#444]">Aplicar ↓</button>
+                    </td>
+                </tr>`;
+
+                const colSpan = 4 + anexosSel.length + (usaFolha ? 2 : 0);
+                html += `<tr id="tr_exp_${idx}" class="hidden"><td colspan="${colSpan}" id="det_${idx}" class="bg-[#121214] p-4 shadow-inner"></td></tr>`;
+            });
+
+            document.getElementById('corpo').innerHTML = html;
+            recalc();
+        }
+
+        function atualizarHistFat(val) { rbt12Value = pM(mascara(val)); document.getElementById('rbt12Ini').value = mascara(val); recalc(); }
+        function atualizarHistFolha(val) { folha12Value = pM(mascara(val)); document.getElementById('folha12Ini').value = mascara(val); recalc(); }
+        function atualizarDado(idx, campo, strVal) { dados[idx][campo] = pM(mascara(strVal)); document.getElementById(`in_${idx}_${campo}`).value = mascara(strVal); recalc(); }
+
+        function recalc() {
+            if(anexosSel.length === 0) return;
+            let histFat = []; let histFolha = [];
+            const usaFolha = anexosSel.some(a => a.startsWith('5') || a.startsWith('3'));
+            let chavesAnexos = Object.keys(NOMES_ANEXOS);
+
+            dados.forEach((mes, idx) => {
+                let totalFatMes = 0;
+                chavesAnexos.forEach(k => totalFatMes += (mes['v'+k]||0));
+                
+                let rbt12 = 0, folha12 = 0;
+
+                if (idx === 0) {
+                    rbt12 = (precisaHistorico && rbt12Value > 0) ? rbt12Value : totalFatMes * 12;
+                    folha12 = (precisaHistorico && folha12Value > 0) ? folha12Value : (mes.folha||0) * 12;
+                } else {
+                    let acumFat = histFat.reduce((a,b)=>a+b,0); let acumFolha = histFolha.reduce((a,b)=>a+b,0);
+                    if (precisaHistorico && rbt12Value > 0) {
+                        let mRest = Math.max(12 - idx, 0);
+                        rbt12 = acumFat + ((rbt12Value / 12) * mRest); folha12 = acumFolha + ((folha12Value / 12) * mRest);
+                    } else {
+                        rbt12 = idx >= 12 ? histFat.slice(-12).reduce((a,b)=>a+b,0) : (acumFat / idx) * 12;
+                        folha12 = idx >= 12 ? histFolha.slice(-12).reduce((a,b)=>a+b,0) : (acumFolha / idx) * 12;
+                    }
+                }
+
+                let fatorR = rbt12 > 0 ? (folha12 / rbt12) : 0;
+                let fx = getFaixa(rbt12);
+
+                document.getElementById(`out_${idx}_rbt12`).innerHTML = `<span class="text-white">${rbt12.toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2})}</span><br><span class="text-[10px] text-gray-500 font-bold">Faixa ${fx.n} <span class="font-normal text-[9px]">(${fx.t})</span></span>`;
+
+                if(usaFolha) {
+                    const elFatorR = document.getElementById(`out_${idx}_fatorR`);
+                    let detalheR = rbt12 > 0 ? `${folha12.toLocaleString('pt-BR',{maximumFractionDigits:0})} /<br>${rbt12.toLocaleString('pt-BR',{maximumFractionDigits:0})}` : '0 /<br>0';
+                    elFatorR.innerHTML = `${(fatorR*100).toFixed(1)}% <div class="text-[9px] text-gray-500 font-normal leading-tight mt-1 pt-1 border-t border-[#1e2a3a]">${detalheR}</div>`;
+                    elFatorR.className = `text-center font-bold bg-[#121c2a] text-[13px] ${fatorR >= 0.28 ? 'text-green-500' : 'text-red-400'}`;
+                }
+
+                const calc = calcularPeriodoDetalhado(mes, rbt12, fatorR);
+                document.getElementById(`out_${idx}_tot`).innerText = calc.total.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById(`out_${idx}_efetiva`).innerText = totalFatMes > 0 ? (calc.total/totalFatMes*100).toFixed(2) + '% Efetiva' : '0,00% Efetiva';
+
+                let detHtml = `<div class="flex flex-wrap gap-4">`;
+                anexosSel.forEach(anexId => {
+                    if(mes['v'+anexId] > 0 && calc.porAnexo[anexId]) {
+                        const anexoObj = calc.porAnexo[anexId];
+                        let somaEfetivasFracoes = 0; 
+
+                        let impostosHtml = Object.entries(anexoObj.det).map(([imp, v]) => {
+                            if(!v.isento) somaEfetivasFracoes += v.efetiva;
+                            let badge = v.tag || "RETIDO / POR FORA";
+                            return `
+                            <div class="bg-[#1e1e20] p-3 rounded border border-[#333336] flex flex-col justify-center ${v.isento ? 'opacity-60' : ''}">
+                                <span class="text-[11px] font-black text-gray-400 uppercase tracking-wider">${imp}</span>
+                                <div class="font-bold text-sm text-white mt-1 ${v.isento ? 'line-through text-gray-500' : ''}">
+                                    ${v.val.toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2})} 
+                                    <span class="${v.isento ? 'text-gray-500' : 'text-maradel'} text-[10px] ml-1">(${(v.efetiva*100).toFixed(2)}%)</span>
+                                </div>
+                                ${v.isento ? `<span class="text-[9px] ${v.tag === 'ISENTO (EXP)' ? 'text-green-500' : (v.tag === 'ABATIDO (PERS.)' ? 'text-blue-400' : 'text-red-400')} font-bold mt-1 tracking-tight">${badge}</span>` : ''}
+                            </div>`;
+                        }).join('');
+
+                        let difProvaReal = Math.abs(somaEfetivasFracoes - anexoObj.aliqEfetiva);
+                        let alertaProvaReal = difProvaReal > 0.0001 ? 
+                            `<span class="text-red-400 ml-1">⚠️ Erro na Tabela: A soma difere da Alíquota Cobrada!</span>` : 
+                            `<span class="text-green-400 ml-1">✓ Cálculo Validado</span>`;
+
+                        detHtml += `
+                            <div class="bg-[#18181b] p-4 rounded-xl shadow border-l-[6px] border-maradel border-t border-r border-b border-[#333336] flex-1 min-w-[280px]">
+                                <div class="flex justify-between items-center mb-4 border-b border-[#333336] pb-3">
+                                    <h4 class="font-black text-white text-lg tracking-tight">${NOMES_ANEXOS[anexId]} <span class="text-[11px] text-gray-500 font-normal ml-1">(${anexoObj.alertaFatorR?'Fator R aplicado':''})</span></h4>
+                                    <div class="text-right">
+                                        <div class="font-black text-xl text-maradel">${anexoObj.total.toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                                        <div class="text-xs text-gray-400 font-bold">${(anexoObj.aliqEfetiva*100).toFixed(2)}% Cobrada</div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-center">
+                                    ${impostosHtml}
+                                </div>
+                                <div class="text-[10px] text-gray-500 font-bold mt-4 pt-2 border-t border-[#333336] flex justify-between">
+                                    <span>Soma Frações: ${(somaEfetivasFracoes*100).toFixed(2)}%</span>
+                                    <span>${alertaProvaReal}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                if(anexosSel.some(a => a.startsWith('5'))) {
+                    let metaFolha = rbt12 * 0.28;
+                    let metaFat = folha12 > 0 ? (folha12 / 0.28) : 0;
+                    detHtml += `<div class="w-full mt-2 p-4 bg-[#121c2a] border border-[#1e2a3a] rounded text-sm text-blue-300">
+                        <span class="font-bold uppercase tracking-wider text-[10px] block mb-2 text-blue-400">Metas Fator R (28%) para Anexo V</span>
+                        Para atingir o Fator R nesta competência (RBT12 base: R$ ${rbt12.toLocaleString('pt-BR',{minimumFractionDigits:2})}), você precisaria de:<br>
+                        ➜ Folha 12m mínima de: <b class="text-white">R$ ${metaFolha.toLocaleString('pt-BR',{minimumFractionDigits:2})}</b> <br>
+                        ➜ Ou Faturamento 12m máximo de: <b class="text-white">R$ ${metaFat.toLocaleString('pt-BR',{minimumFractionDigits:2})}</b>
+                    </div>`;
+                }
+
+                if(calc.total === 0) detHtml += `<div class="text-gray-500 text-sm font-bold w-full text-center py-4">Nenhum imposto calculado para esta competência.</div>`;
+                detHtml += `</div>`;
+                document.getElementById(`det_${idx}`).innerHTML = detHtml;
+
+                histFat.push(totalFatMes);
+                histFolha.push(mes.folha||0);
+            });
+        }
+
+        function toggleExp(idx) {
+            const btn = event.target;
+            const tr = document.getElementById(`tr_exp_${idx}`);
+            dados[idx].exp = !dados[idx].exp;
+            if(dados[idx].exp) { tr.classList.remove('hidden'); btn.innerText = '-'; } 
+            else { tr.classList.add('hidden'); btn.innerText = '+'; }
+        }
+        
+        function aplicarParaBaixo(idx) { idxAplicarPendente = idx; document.getElementById('modalConfirmAplicar').classList.remove('hidden'); }
+        function fecharModalAplicar() { idxAplicarPendente = null; document.getElementById('modalConfirmAplicar').classList.add('hidden'); }
+
+        function confirmarAplicarParaBaixo() {
+            const r = dados[idxAplicarPendente];
+            for(let i=idxAplicarPendente+1; i<dados.length; i++){
+                anexosSel.forEach(a => { dados[i]['v'+a] = r['v'+a]; document.getElementById(`in_${i}_v${a}`).value = mascara(r['v'+a].toFixed(2)); });
+                if(anexosSel.some(a => a.startsWith('5') || a.startsWith('3'))) { dados[i].folha = r.folha; document.getElementById(`in_${i}_folha`).value = mascara(r.folha.toFixed(2)); }
+            }
+            recalc(); fecharModalAplicar();
+        }
+
+        function calcularPeriodoDetalhado(mes, rbt12, fatorR) {
+            let res = { total: 0, porAnexo: {} };
+            anexosSel.forEach(anexoId => {
+                const fatAnexo = mes['v'+anexoId] || 0;
+                if(fatAnexo > 0) {
+                    let baseId = parseInt(anexoId.split('_')[0]);
+                    let variant = anexoId.split('_')[1];
+                    let tabelaUsadaId = baseId;
+                    let alertaFatorR = false;
+
+                    if (baseId === 5 && fatorR >= 0.28) { tabelaUsadaId = 3; alertaFatorR = true; }
+
+                    const faixas = TABELAS[tabelaUsadaId];
+                    const f = faixas.find(fx => rbt12 <= fx.ate) || faixas[faixas.length-1];
+                    let aliqEf = rbt12 <= 0 ? f.aliq : ((rbt12 * f.aliq) - f.ded) / rbt12;
+                    let aliqEfetivaFinal = Math.max(aliqEf, 0);
+                    
+                    let detImpostos = {}; let vImpostoAnexoTotal = 0; let aliqEfetivaCobrada = 0;
+                    
+                    let configPers = abatimentosPers[anexoId] || {};
+                    let deduzirMonoCheckbox = false;
+                    
+                    if(anexoId === '1_ST') deduzirMonoCheckbox = document.getElementById('chkAnexo1_ST_Mono')?.checked;
+                    if(anexoId === '2_ST') deduzirMonoCheckbox = document.getElementById('chkAnexo2_ST_Mono')?.checked;
+
+                    Object.entries(f.part).forEach(([k,p]) => {
+                        if (p > 0) {
+                            let isento = false;
+                            let tag = "";
+
+                            if (variant === 'EXP' && (k === 'Pis' || k === 'Cofins' || k === 'ISS' || k === 'ICMS' || k === 'IPI')) {
+                                isento = true; tag = "ISENTO (EXP)";
+                            } else if (variant === 'RET' && (k === 'ISS' || k === 'ICMS')) {
+                                isento = true; tag = "RETIDO";
+                            } else if (variant === 'ST') {
+                                if (k === 'ICMS' || k === 'IPI') {
+                                    isento = true; tag = "ST";
+                                } else if ((k === 'Pis' || k === 'Cofins') && deduzirMonoCheckbox) {
+                                    isento = true; tag = "MONOFÁSICO";
+                                }
+                            } else if (variant === 'PERS') {
+                                let matchK = k === 'ISS' ? 'ISS' : (k === 'ICMS' ? 'ICMS' : k);
+                                if (configPers[matchK]) { isento = true; tag = "ABATIDO (PERS.)"; }
+                            }
+
+                            const valImposto = (fatAnexo * aliqEfetivaFinal)*p;
+                            const efetivaImposto = aliqEfetivaFinal*p;
+
+                            detImpostos[k] = { val: valImposto, efetiva: efetivaImposto, isento: isento, tag: tag };
+                            
+                            if (!isento) {
+                                vImpostoAnexoTotal += valImposto;
+                                aliqEfetivaCobrada += efetivaImposto;
+                            }
+                        }
+                    });
+                    res.total += vImpostoAnexoTotal;
+                    res.porAnexo[anexoId] = { total: vImpostoAnexoTotal, aliqEfetiva: aliqEfetivaCobrada, det: detImpostos, alertaFatorR: alertaFatorR };
+                }
+            });
+            return res;
+        }
+
+        function exportarExcel() {
+            if(dados.length === 0 || anexosSel.length === 0) { alert("Preencha dados na simulação."); return; }
+            let dataArr = [];
+            let header = ["Mês/Ano", "RBT12", "Faixa"];
+            anexosSel.forEach(a => header.push(NOMES_ANEXOS[a]));
+            if(anexosSel.some(a => a.startsWith('5') || a.startsWith('3'))) header.push("Folha Salarial", "Fator R (%)");
+            header.push("Total Faturamento", "DAS Total", "Alíquota Efetiva Global (%)");
+            
+            anexosSel.forEach(a => {
+                header.push(`Aliq. Ef. ${NOMES_ANEXOS[a]}`, `Imposto ${NOMES_ANEXOS[a]}`, `IRPJ ${NOMES_ANEXOS[a]}`, `CSLL ${NOMES_ANEXOS[a]}`, `Cofins ${NOMES_ANEXOS[a]}`, `PIS ${NOMES_ANEXOS[a]}`, `CPP ${NOMES_ANEXOS[a]}`);
+                if(a.startsWith('2')) header.push(`IPI ${NOMES_ANEXOS[a]}`);
+                header.push(`ISS / ICMS ${NOMES_ANEXOS[a]}`);
+            });
+            dataArr.push(header);
+
+            let histFat = []; let histFolha = [];
+            let chavesAnexos = Object.keys(NOMES_ANEXOS);
+
+            dados.forEach((mes, idx) => {
+                let totalFatMes = 0;
+                chavesAnexos.forEach(k => totalFatMes += (mes['v'+k]||0));
+                
+                let rbt12 = 0, folha12 = 0;
+                if (idx === 0) {
+                    rbt12 = (precisaHistorico && rbt12Value > 0) ? rbt12Value : totalFatMes * 12;
+                    folha12 = (precisaHistorico && folha12Value > 0) ? folha12Value : (mes.folha||0) * 12;
+                } else {
+                    let acumFat = histFat.reduce((a,b)=>a+b,0); let acumFolha = histFolha.reduce((a,b)=>a+b,0);
+                    if (precisaHistorico && rbt12Value > 0) {
+                        let mRest = Math.max(12 - idx, 0);
+                        rbt12 = acumFat + ((rbt12Value / 12) * mRest); folha12 = acumFolha + ((folha12Value / 12) * mRest);
+                    } else {
+                        rbt12 = idx >= 12 ? histFat.slice(-12).reduce((a,b)=>a+b,0) : (acumFat / idx) * 12;
+                        folha12 = idx >= 12 ? histFolha.slice(-12).reduce((a,b)=>a+b,0) : (acumFolha / idx) * 12;
+                    }
+                }
+                
+                let fatorR = rbt12 > 0 ? (folha12 / rbt12) : 0;
+                let fx = getFaixa(rbt12);
+                const calc = calcularPeriodoDetalhado(mes, rbt12, fatorR);
+                histFat.push(totalFatMes); histFolha.push(mes.folha||0);
+
+                let row = [mes.mes, rbt12, `Faixa ${fx.n}`];
+                anexosSel.forEach(a => row.push(mes['v'+a]||0));
+                if(anexosSel.some(a => a.startsWith('5') || a.startsWith('3'))) row.push(mes.folha||0, fatorR);
+                row.push(totalFatMes, calc.total, totalFatMes > 0 ? (calc.total/totalFatMes) : 0);
+
+                anexosSel.forEach(a => {
+                    const obj = calc.porAnexo[a] || { aliqEfetiva:0, total:0, det:{} };
+                    row.push(obj.aliqEfetiva, obj.total, obj.det.IRPJ?.val||0, obj.det.CSLL?.val||0, obj.det.Cofins?.val||0, obj.det.Pis?.val||0, obj.det.CPP?.val||0);
+                    if(a.startsWith('2')) row.push(obj.det.IPI?.val||0);
+                    row.push(obj.det.ISS?.val || obj.det.ICMS?.val || 0);
+                });
+                dataArr.push(row);
+            });
+
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(dataArr);
+            XLSX.utils.book_append_sheet(wb, ws, "Simulação");
+            XLSX.writeFile(wb, "Simulacao_Maradel.xlsx");
+        }
+
+        function aba(t) {
+            document.getElementById('cSim').classList.toggle('hidden', t!=='sim');
+            document.getElementById('cRef').classList.toggle('hidden', t!=='ref');
+            document.getElementById('aSim').classList.toggle('tab-active', t==='sim');
+            document.getElementById('aSim').classList.toggle('text-gray-500', t!=='sim');
+            document.getElementById('aRef').classList.toggle('tab-active', t==='ref');
+            document.getElementById('aRef').classList.toggle('text-gray-500', t!=='ref');
+            if(t==='ref') renderRef();
+        }
+
+        function renderRef() {
+            const area = document.getElementById('tabelasArea');
+            area.innerHTML = "";
+            const headers = { 1: "ANEXO I - COMÉRCIO", 2: "ANEXO II - INDÚSTRIA", 3: "ANEXO III - SERVIÇOS", 4: "ANEXO IV - OBRAS / ESPECÍFICOS", 5: "ANEXO V - SERVIÇOS" };
+            const tribs = ['IRPJ', 'CSLL', 'Cofins', 'Pis', 'CPP', 'ICMS', 'ISS', 'IPI'];
+
+            [1,2,3,4,5].forEach(i => {
+                area.innerHTML += `
+                    <div class="mb-10">
+                        <h3 class="font-black text-xl text-maradel mb-3">${headers[i]}</h3>
+                        <div class="rounded border border-[#333336] shadow-sm">
+                            <table class="w-full ref-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-16">Faixa</th><th class="w-40">Receita 12m</th><th class="w-20">Alíquota</th><th class="w-24">Dedução</th>
+                                        ${tribs.map(t => `<th class="w-14">${t}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${TABELAS[i].map((f, idx) => `
+                                        <tr>
+                                            <td class="font-bold text-white">${idx+1}ª</td>
+                                            <td>Até ${f.ate.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                                            <td class="font-bold text-white">${(f.aliq*100).toFixed(2)}%</td>
+                                            <td>${f.ded.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                                            ${tribs.map(t => `<td>${f.part[t] ? (f.part[t]*100).toFixed(2)+'%' : '-'}</td>`).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
